@@ -5,8 +5,24 @@ In this project, we want to build an app that tracks the number of ingredients y
 ### Stack:
 
 - Backend: FastAPI Web Server
-- DB: SQL Lite
+- DB: SQLite
 - Frontend: Undecided.
+
+# Users Table
+1. `feature` - Every user will have an email and a password.
+2. `feature` - Each password must be hashed for user protection.
+2. `feature` - There will also be a "created date" and an "updated date" for each user. If a user decides to update their email or password, it should be reflected in the updated date.
+3. `feature` - In the future, we want users to use their email to sign in (like they will log into google/twitter/etc.)
+
+```sql
+users (
+		id INTEGER PRIMARY KEY AUTOINCREMENT
+		email TEXT UNIQUE NOT NULL,
+		hashed_pw TEXT NOT NULL,
+		created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+		updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+```
 
 # Ingredients Table
 
@@ -27,29 +43,32 @@ In this project, we want to build an app that tracks the number of ingredients y
 ```sql
 ingredients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT UNIQUE NOT NULL,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,     -- users can have the same ingredient names
     category TEXT NOT NULL, -- produce, staples, protein, dairy
     unit_type TEXT NOT NULL, -- atomic, grams, millilitres
-    quantity FLOAT NOT NULL, -- The amount in stock
-    minimum_threshold FLOAT NOT NULL,
-    expiration_date DATE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    quantity REAL NOT NULL, -- The amount in stock
+    minimum_threshold REAL NOT NULL,
+    expiration_date TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, name)
 )
 ```
 
-| id - `int` (pk) | name - `str` (unique) | catgegory - `str` | unit_type - `str` | quantity - `float` | minimum_threshold - `float` | expiration_date - `date` | created_at - `datetime` | updated_at - `datetime` |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | banana | produce | atomic | 12 | 3 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 2 | rice | staples | grams | 5000 | 1000 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 3 | salt | staples | grams | 500 | 100 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 4 | milk | dairy | millilitres | 1500 | 200 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 5 | flour | staples | grams | 1000 | 200 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 6 | cooking oil | oils | millilitres | 1000 | 200 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 7 | egg | protein | atomic | 12 | 2 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 8 | chicken breast | protein | grams | 500 | 50 | <today’s date + 5> | <today’s date> | <today’s date> |
+| id - `int` (pk) | user_id - `str` (fk) | name - `str` (unique) | category - `str` | unit_type - `str` | quantity - `float` | minimum_threshold - `float` | expiration_date - `date` | created_at - `datetime` | updated_at - `datetime` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1 | banana | produce | atomic | 12 | 3 | <today’s date + 5> | <today’s date> | <today’s date> |
+| 2 | 1 | rice | staples | grams | 5000 | 1000 | <today’s date + 5> | <today’s date> | <today’s date> |
+| 3 | 1 | salt | staples | grams | 500 | 100 | <today’s date + 5> | <today’s date> | <today’s date> |
+| 4 | 1 | milk | dairy | millilitres | 1500 | 200 | <today’s date + 5> | <today’s date> | <today’s date> |
+| 5 | 1 | flour | staples | grams | 1000 | 200 | <today’s date + 5> | <today’s date> | <today’s date> |
+| 6 | 1 | cooking oil | oils | millilitres | 1000 | 200 | <today’s date + 5> | <today’s date> | <today’s date> |
+| 7 | 1 | egg | protein | atomic | 12 | 2 | <today’s date + 5> | <today’s date> | <today’s date> |
+| 8 | 1 | chicken breast | protein | grams | 500 | 50 | <today’s date + 5> | <today’s date> | <today’s date> |
 
-## Conversion Table
+# Conversion Table
 
 1. In many recipes, different terms are used. For example, a cup of rice. A tablespoon of salt etc. Using a conversion table, we can convert the term used in the recipe, into a quantity that is used in the Ingredients table. Then, we can subtract the value from the Ingredients table as and when necessary.
 2. `feature` - If a recipe states “Add (x) (measurement_unit)”, convert the (measurement_unit) used to get the quantity, and subtract the quantity from the Ingredients table when the user has used that ingredient to cook the dish.
@@ -59,7 +78,7 @@ conversions (
     id INTEGER PRIMARY KEY,
     ingredient_name TEXT NOT NULL,
     measurement_unit TEXT NOT NULL,
-    quantity_in_standard_unit FLOAT NOT NULL,
+    quantity_in_standard_unit REAL NOT NULL,
     FOREIGN KEY (ingredient_name) REFERENCES ingredients(name) ON UPDATE CASCADE,
     UNIQUE(ingredient_name, measurement_unit)
 )
@@ -74,7 +93,7 @@ conversions (
 | 5 | cooking oil | tablespoon | 14.7868 |
 | 6 | cooking oil | teaspoon | 4.92892 |
 
-## Recipe and Recipe Ingredients Table
+# Recipe and Recipe Ingredients Table
 
 1. `feature` - At any given point in time, we need to reflect what recipes are cookable, i.e. if the user has enough ingredients, then the UI should show these are the possible recipes. Hence, we should have a list of cookable recipes.
 2. `feature` - When a user wants to cook a recipe, the backend will check whether they have enough ingredients to cook the chosen recipe, and if not, what are the missing ingredients, and their quantities.
@@ -84,19 +103,21 @@ conversions (
 ```sql
 recipes (
 		id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL,  -- user ownership of the recipe
 		name TEXT NOT NULL,
 		description TEXT,
 		servings INTEGER DEFAULT 1,
 		prep_time_minutes INTEGER,
-		created_at DATETIME,
-		updated_at DATETIME
+		created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+		updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 )
 
 recipe_ingredients (
 		id INTEGER PRIMARY KEY,
 		recipe_id INTEGER NOT NULL,
 		ingredient_name TEXT NOT NULL,
-		quantity FLOAT NOT NULL,
+		quantity REAL NOT NULL,
 		unit TEXT NOT NULL,
 		notes TEXT, --e.g. "chopped", "room temperature" etc.
         FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
@@ -121,33 +142,33 @@ recipe_ingredients (
 
 # Backend Endpoints
 
-1. `get_ingredient_quantity(ingredient: str | id) -> float`
+1. `get_ingredient_quantity(ingredient: str | id, user_id: int) -> float`
     1. Given an ingredient, the function returns the quantity available.
-2. `get_ingredient_info(ingredient: str | id) -> Ingredient`
+2. `get_ingredient_info(ingredient: str | id, user_id: int) -> Ingredient`
     1. Given an ingredient, return the row associated with that ingredient from the Ingredients table.
-3. `add_new_ingredient(ingredient: Ingredient) -> None` 
+3. `add_new_ingredient(ingredient: Ingredient, user_id: int) -> None` 
     1. This function should allow users to add a new ingredient into the Ingredients table.
-4. `delete_ingredient(ingredient: Ingredient) -> None`
+4. `delete_ingredient(ingredient: Ingredient, user_id: int) -> None`
     1. This function deletes the entire ingredient from the Ingredients table.
-5. `update_ingredient(ingredient: str | id, info: dict) -> None`
+5. `update_ingredient(ingredient: str | id, info: dict, user_id: int) -> None`
     1. This function updates information of an ingredient like quantity etc.
-6. `get_recipe(recipe_id: int) → Recipe`
-    1. This function should display the ingredients needed, together with their associated quantity, for a given recipe id.
-8. `add_recipe(recipe_name: str, recipe_ingredients: Recipe) -> None`
+6. `get_recipe(recipe_id: int, user_id: int) → Recipe`
+    1. This function should display the ingredients needed, together with their associated quantity, for a given recipe id and user id.
+8. `add_recipe(recipe_name: str, recipe_ingredients: Recipe, user_id: int) -> None`
     1. This function should allow users to add recipes to the backend database. Populate both recipe and recipe_ingredients table.
-9. `delete_recipe(recipe_name: str) -> None`
+9. `delete_recipe(recipe_name: str, user_id: int) -> None`
     1. Deletes the recipe row from the table. Delete from both recipe and recipe_ingredients table.
-10. `is_cookable_recipe(recipe: str | int) -> bool`
+10. `is_cookable_recipe(recipe: str | int, user_id: int) -> bool`
     1. Checks if we have enough ingredients for a particular recipe.
-11. `get_missing_ingredients(recipe: str | int) -> List[IngredientBasicInfo]`
+11. `get_missing_ingredients(recipe: str | int, user_id: int) -> List[IngredientBasicInfo]`
     1. Lists the missing ingredients (name, quantity) for a particular recipe, given the current ingredients we have.
-12. `get_cookable_recipes() -> List[Recipe]` 
+12. `get_cookable_recipes(user_id: int) -> List[Recipe]` 
     1. Check ingredient availailability for every recipe, and returns a List of recipes that we can cook.
-13. `cook_recipe(recipe_id: int, servings: float, **kwargs) -> None`
+13. `cook_recipe(recipe_id: int, servings: float, user_id: int, **kwargs) -> None`
     1. Deducts the ingredients from the Ingredients database, depending on the number of servings made. If a user added more than the necessary ingredients or less, then the user should provide a custom object that describes which fields should be updated, and by how much.
-14. `get_shopping_list() -> List[IngredientBasicInfo]`
+14. `get_shopping_list(user_id: int) -> List[IngredientBasicInfo]`
     1. A list of ingredients to buy that have dropped below the minimum threshold or have expired.
-15. `get_expiring_ingredients(days: int = 7) -> List[Tuple[str, date]]`
+15. `get_expiring_ingredients(user_id: int, days: int = 7) -> List[Tuple[str, date]]`
     1. Show which ingredients are about to expire in `days` days, and when their expiry date is.
 16. Other functions to add:
     1. unit_validation → Ensure recipe ingredients use units that exist in your conversion table or are already standardized.

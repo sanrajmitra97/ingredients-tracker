@@ -1,1 +1,4 @@
 .venv/
+sqlite-tutorial/
+.env
+__pycache__/
