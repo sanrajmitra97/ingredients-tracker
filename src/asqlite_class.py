@@ -14,6 +14,7 @@ logger = logging.getLogger('uvicorn.error')
 class SqliteManager:
     def __init__(self, db_name: str) -> None:
         self.db_name = db_name
+        self.conn = None
     
     async def connect(self) -> None:
         """
@@ -23,6 +24,8 @@ class SqliteManager:
         # Connect to the database
         try:
             self.conn = await aiosqlite.connect(self.db_name)
+
+            await self.conn.execute("PRAGMA foreign_keys = ON;") # Enforce foreign key constraints
 
             self.cur = await self.conn.cursor()
 
@@ -43,8 +46,12 @@ class SqliteManager:
 
             logger.info("Set up the tables.")
 
-        except Exception as e:
-            logger.error(f"Error when connectiong to {self.db_name} with error: {e}")
+        except aiosqlite.Error as e1:
+            logger.error(f"SQLite error when connnecting to {self.db_name} with error: {e1}")
+            raise
+        except Exception as e2:
+            logger.error(f"Error when connecting to {self.db_name} with error: {e2}")
+            raise
 
     async def close(self) -> None:
         """Close the database connection"""
@@ -52,3 +59,15 @@ class SqliteManager:
             await self.conn.close()
             logger.info("Closed asqlite connection.")
         
+    async def get_connection(self) -> aiosqlite.Connection:
+        """
+        Get the connection to the sqlite database
+
+        Args:
+            None.
+        Returns:
+            Connection of type "aiosqlite.Connection".
+        """
+        if not self.conn:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        return self.conn
