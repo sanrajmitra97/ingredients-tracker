@@ -11,7 +11,7 @@ ingredients_schema = """CREATE TABLE IF NOT EXISTS ingredients (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             name TEXT UNIQUE NOT NULL,
                             category TEXT NOT NULL,
-                            unit_type TEXT NOT NULL,
+                            unit_type TEXT NOT NULL
                         );
                     """
 
@@ -25,10 +25,9 @@ inventory_schema = """CREATE TABLE IF NOT EXISTS inventory (
                         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                        FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE
+                        FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE,
                         UNIQUE(user_id, ingredient_id)
                     );
-
 """
 
 

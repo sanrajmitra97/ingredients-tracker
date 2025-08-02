@@ -28,7 +28,7 @@ users (
 2. We need to be consistent with units.  We use the following units:
     1. weight - grams.
     2. volume - millilitres. 
-    3. atomic - itself.
+    3. pieces - itself.
 3. The different categories:
     1. Produce - e.g. Banana, Garlic
     2. Protein - e.g. Eggs, Chicken Breast, Fish
@@ -42,18 +42,18 @@ ingredients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE NOT NULL,
     category TEXT NOT NULL, -- category: produce, staples, protein, dairy, condiment
-    unit_type TEXT NOT NULL, -- category: atomic, grams, millilitres
+    unit_type TEXT NOT NULL, -- category: pieces, grams, millilitres
 )
 ```
 | id - `int` (pk) | name - `str` (unique) | category | unit_type - `str`
 | --- | --- | --- | --- |
-| 1 | banana | produce | atomic |
+| 1 | banana | produce | pieces |
 | 2 | rice | staples | grams |
 | 3 | salt | staples | grams |
 | 4 | milk | dairy | millilitres |
 | 5 | flour | staples | grams |
 | 6 | cooking oil | oils | millilitres |
-| 7 | egg | protein | atomic |
+| 7 | egg | protein | pieces |
 | 8 | chicken breast | protein | grams |
 
 # `inventory` Table
