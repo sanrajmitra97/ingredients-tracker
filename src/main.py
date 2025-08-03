@@ -20,7 +20,7 @@ asqlite_manager = None
 
 # Set up logger
 logger = logging.getLogger('uvicorn.error')
-logger.setLevel(logging.ERROR)
+logger.setLevel(logging.INFO)
 
 
 @asynccontextmanager
@@ -28,6 +28,11 @@ async def lifespan(app: FastAPI):
     global asqlite_manager
     asqlite_manager = SqliteManager(db_name=DB_NAME)
     await asqlite_manager.connect()
+
+    # Create test user for development
+    test_user_id = await asqlite_manager.create_test_user()
+    logger.info(f"Created test user with id {test_user_id} for development")
+
     yield
     await asqlite_manager.close()
 
@@ -169,8 +174,8 @@ async def get_ingredient_info_by_id(ingredient_id: int, user_id: int = Depends(g
         raise HTTPException(status_code=404, detail=error_msg)
     return ingredient_info
 
-@app.post("/inventory", status_code=201)
-async def add_ingredient_to_inventory(ingredient: Ingredient, user_id: int) -> None:
+@app.post("/v1/inventory", status_code=201, response_model=IngredientInsertionResponse)
+async def add_ingredient_to_inventory(ingredient: Ingredient, user_id: int = Depends(get_current_user_id)):
     """
     Add a new ingredient into the inventory table.
     Break up the ingredient into two parts:
@@ -202,14 +207,14 @@ async def add_ingredient_to_inventory(ingredient: Ingredient, user_id: int) -> N
 
     try:
         ingredient_exists_in_inventory = await asqlite_manager.ingredient_exists_in_inventory_by_name(
-            ingredient_name=Ingredient.name,
+            ingredient_name=ingredient.name,
             user_id=user_id
         )
         if ingredient_exists_in_inventory:
             raise HTTPException(status_code=409, detail=f"{ingredient.name} already exists in the inventory. Update it's value instead.")
         
         ingredient_exists_in_ingredients_table = await asqlite_manager.ingredient_exists_in_ingredients_by_name(
-            ingredient_name=Ingredient.name
+            ingredient_name=ingredient.name
         )
 
         if not ingredient_exists_in_ingredients_table:

@@ -18,7 +18,7 @@ ingredients_schema = """CREATE TABLE IF NOT EXISTS ingredients (
 inventory_schema = """CREATE TABLE IF NOT EXISTS inventory (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         user_id INTEGER NOT NULL,
-                        ingredient_id INT NOT NULL,
+                        ingredient_id INTEGER NOT NULL,
                         quantity REAL NOT NULL,
                         minimum_threshold REAL NOT NULL,
                         expiration_date TEXT,

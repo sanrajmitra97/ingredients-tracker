@@ -12,7 +12,7 @@ class Category(str, Enum):
 class MeasurementUnit(str, Enum):
     grams = "grams"
     millilitres = "millilitres"
-    piecces = "pieces"
+    pieces = "pieces"
 
 class IngredientInsertion(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)

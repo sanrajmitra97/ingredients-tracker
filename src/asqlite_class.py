@@ -88,6 +88,21 @@ class SqliteManager:
             raise RuntimeError("Database not connected. Call connect() first.")
         return self.conn
     
+    async def create_test_user(self, email: str = "test@example.com") -> int:
+        """Create a test user for development purposes. Not to be used in production."""
+        query = """
+            INSERT OR IGNORE INTO users (email, hashed_pw) 
+            VALUES (?, 'dummy_hash_for_testing')
+        """
+        await self.cur.execute(query, (email,))
+        await self.conn.commit()
+        
+        # Get the user ID
+        get_query = "SELECT id FROM users WHERE email = ?"
+        cursor = await self.cur.execute(get_query, (email,))
+        result = await cursor.fetchone()
+        return result[0] if result else None    
+    
     async def get_ingredient_quantity_by_name(self, ingredient_name: str, user_id: int) -> float:
         """
         Get the quantity of ingredient name from the user's inventory.
@@ -149,10 +164,9 @@ class SqliteManager:
         """
         res = await self.cur.execute(query, (ingredient_name, ))
         table: Tuple[str] = await res.fetchone()
-        unit_type = table[0]
-        if not unit_type:
+        if not table:
             raise RuntimeError("Ingredient is not found inside the ingredients table")
-        return unit_type
+        return table[0]
     
     async def get_ingredient_measurement_unit_by_id(self, ingredient_id: int) -> str:
         """
@@ -372,6 +386,7 @@ class SqliteManager:
         last_row_id = self.cur.lastrowid
         await self.conn.commit()
         if not last_row_id:
+            await self.conn.rollback()
             raise IngredientInsertionError(f"Error inserting ingredient {ingredient.name} into the `ingredients` table.")
         logger.info(f"Added ingredient {ingredient.name} into the `ingredients` table with id {last_row_id}.")
         return last_row_id
@@ -406,12 +421,44 @@ class SqliteManager:
         last_row_id = self.cur.lastrowid
         await self.conn.commit()
         if not last_row_id:
+            await self.conn.rollback()
             raise IngredientInsertionError(f"Error inserting ingredient with id {ingredient_id} into the `inventory` table.")
         logger.info(f"Added ingredient with id {ingredient_id} into the `inventory` table with id {last_row_id} for user {user_id}.")
+
+        # Fetch the created_at and updated_at timestamps
+        created_updated_timings_query = """
+                                        SELECT created_at, updated_at
+                                        FROM inventory
+                                        WHERE id = ?
+                                    """
+        created_updated_res = await self.cur.execute(created_updated_timings_query, (last_row_id,))
+        created_updated_table: Tuple[str, str] = await created_updated_res.fetchone()
+        if not created_updated_table:
+            raise IngredientInsertionError(f"Error fetching created_at and updated_at for ingredient with id {ingredient_id} in the `inventory` table.")
+        
+        created_at, updated_at = created_updated_table
+
+        # Fetch the name, category, and unit_type from the ingredients table
+        ingredient_info_query = """
+                                    SELECT name, category, unit_type
+                                    FROM ingredients
+                                    WHERE id = ?
+                                """
+        ingredient_info_res = await self.cur.execute(ingredient_info_query, (ingredient_id,))
+        ingredient_info_table: Tuple[str, str, str] = await ingredient_info_res.fetchone()
+        if not ingredient_info_table:
+            raise IngredientInsertionError(f"Error fetching ingredient info for ingredient with id {ingredient_id} in the `ingredients` table.")
+        name, category, unit_type = ingredient_info_table
         return IngredientInsertionResponse(
             ingredient_id=ingredient_id,
             inventory_id=last_row_id,
             user_id=user_id,
-            created_at=datetime.now().isoformat(),  # This will be set by the database
-            updated_at=datetime.now().isoformat()   # This will be set by the database
+            created_at=created_at,
+            updated_at=updated_at,
+            name=name,
+            category=category,
+            unit_type=unit_type,
+            quantity=inventory_insertion.quantity,
+            minimum_threshold=inventory_insertion.minimum_threshold,
+            expiration_date=inventory_insertion.expiration_date
         )
