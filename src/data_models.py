@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from enum import Enum
 
 class Category(str, Enum):
@@ -24,11 +24,24 @@ class InventoryInsertion(BaseModel):
     minimum_threshold: float = Field(..., ge=0)
     expiration_date: str | None = None # e.g."2023-10-01"
 
+class InventoryUpdate(BaseModel):
+    quantity: float | None = Field(default=None, ge=0)
+    minimum_threshold: float | None = Field(default=None, ge=0)
+    expiration_date: str | None = None # e.g."2023-10-01"
+
+    class Config:
+        # This validates that at least one field is provided for update
+        @field_validator('__root__')
+        def at_least_one_field(cls, values):
+            if not any(v is not None for v in values.values()):
+                raise ValueError('At least one field must be provided for update')
+            return values        
+
 class Ingredient(IngredientInsertion, InventoryInsertion):
     """Represents an ingredient in the inventory + ingredeint table."""
     pass
 
-class IngredientInsertionResponse(IngredientInsertion, InventoryInsertion):
+class IngredientFullResponse(IngredientInsertion, InventoryInsertion):
     ingredient_id: int
     inventory_id: int
     user_id: int

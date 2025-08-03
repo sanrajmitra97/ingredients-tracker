@@ -58,11 +58,11 @@ recipes_schema = """CREATE TABLE IF NOT EXISTS recipes (
 recipe_ingredients_schema = """CREATE TABLE IF NOT EXISTS recipe_ingredients (
                                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                                     recipe_id INTEGER NOT NULL,
-                                    ingredient_name TEXT NOT NULL,
+                                    ingredient_id TEXT NOT NULL,
                                     quantity REAL NOT NULL,
                                     unit TEXT NOT NULL,
                                     notes TEXT,
                                     FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
-                                    FOREIGN KEY (ingredient_name) REFERENCES ingredients(name) ON UPDATE CASCADE
+                                    FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE
                                 );
 """

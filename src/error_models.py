@@ -9,3 +9,11 @@ class IngredientInsertionError(Exception):
 class IngredientAlreadyExistsInInventoryError(Exception):
     """Raised when an ingredient already exists in the inventory table for a user."""
     pass
+
+class InventoryDeletionError(Exception):
+    """Raised when there is an error deleting an ingredient from the inventory table."""
+    pass
+
+class InventoryUpdateError(Exception):
+    """Raised when there is an error updating an ingredient in the inventory table."""
+    pass

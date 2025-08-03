@@ -11,7 +11,8 @@ from src.data_models import (
     IngredientInsertion,
     InventoryInsertion,
     Ingredient,
-    IngredientInsertionResponse
+    IngredientFullResponse,
+    InventoryUpdate
 )
 
 # Constants
@@ -174,7 +175,7 @@ async def get_ingredient_info_by_id(ingredient_id: int, user_id: int = Depends(g
         raise HTTPException(status_code=404, detail=error_msg)
     return ingredient_info
 
-@app.post("/v1/inventory", status_code=201, response_model=IngredientInsertionResponse)
+@app.post("/v1/inventory", status_code=201, response_model=IngredientFullResponse)
 async def add_ingredient_to_inventory(ingredient: Ingredient, user_id: int = Depends(get_current_user_id)):
     """
     Add a new ingredient into the inventory table.
@@ -236,7 +237,7 @@ async def add_ingredient_to_inventory(ingredient: Ingredient, user_id: int = Dep
 
         # Add the ingredient into the inventory table
         try:
-            inventory_meta_data: IngredientInsertionResponse = await asqlite_manager.add_ingredient_into_inventory(
+            inventory_meta_data: IngredientFullResponse = await asqlite_manager.add_ingredient_into_inventory(
                 user_id=user_id,
                 ingredient_id=ingredient_id,
                 inventory_insertion=inventory_insertion
@@ -254,6 +255,115 @@ async def add_ingredient_to_inventory(ingredient: Ingredient, user_id: int = Dep
         logger.error(error_msg)
         raise e
 
+@app.delete("/v1/inventory/by_id/{ingredient_id}")
+async def delete_ingredient_from_inventory_by_id(ingredient_id: int, user_id: int = Depends(get_current_user_id)) -> None:
+    """
+    Delete an ingredient from the inventory table by its id for the user.
+    
+    If the ingredient does not exist in the inventory table, it will raise a 404 Not Found error.
+
+    Args:
+        ingredient_id (int) - The id of the ingredient to be deleted.
+        user_id (int) - The user's id in the database.
+    Returns:
+        None - If the ingredient is deleted successfully.
+    Raises:
+        HTTPException - If the ingredient does not exist in the inventory table or if it is being used in any recipes.
+    """
+    try:
+        # Check if the ingredient exists in the inventory for the user
+        ingredient_exists = await asqlite_manager.ingredient_exists_in_inventory_by_id(
+            ingredient_id=ingredient_id,
+            user_id=user_id
+        )
+        
+        if not ingredient_exists:
+            error_msg = f"Ingredient with id {ingredient_id} does not exist in inventory for user {user_id}."
+            raise HTTPException(status_code=404, detail=error_msg)
+        
+        
+        res = await asqlite_manager.delete_ingredient_from_inventory_by_id(
+            ingredient_id=ingredient_id,
+            user_id=user_id
+        )
+
+        if not res:
+            error_msg = f"Ingredient with id {ingredient_id} not found in inventory for user {user_id}."
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            logger.info(f"Deleted ingredient with id {ingredient_id} from inventory for user {user_id}.")
+    
+    except Exception as e:
+        if e.__class__.__name__ == "InventoryDeletionError":
+            error_msg = f"Error deleting ingredient from inventory: {e}"
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            error_msg = f"Unknown error occurred while deleting ingredient from inventory: {e}"
+            logger.error(error_msg)
+            raise HTTPException(status_code=500, detail=error_msg)
+
+@app.patch("/v1/inventory/by_id/{ingredient_id}", response_model=IngredientFullResponse)
+async def update_ingredient_in_inventory_by_id(ingredient_id: int, updates: InventoryUpdate, user_id: int = Depends(get_current_user_id)):
+    """
+    For a given ingredient id, together with the user id, update the ingredient in the inventory table.
+
+    Args:
+        ingredient_id (int) - The id of the ingredient to be updated.
+        updates (InventoryInsertion) - The updates to be made to the ingredient.
+        user_id (int) - The user's id in the database.
+    Returns:
+        IngredientFullResponse - The updated ingredient information.
+    Raises:
+        HTTPException - If the ingredient does not exist in the inventory table or if the updates are invalid.
+    """
+    try:
+        # Check if the ingredient exists in the inventory for the user
+        ingredient_exists = await asqlite_manager.ingredient_exists_in_inventory_by_id(
+            ingredient_id=ingredient_id,
+            user_id=user_id
+        )
+
+        if not ingredient_exists:
+            error_msg = f"Ingredient with id {ingredient_id} does not exist in inventory for user {user_id}."
+            raise HTTPException(status_code=404, detail=error_msg)
+        
+        # Update the ingredient in the inventory table
+        try:
+            updates = updates.model_dump(exclude_unset=True)
+            updated_ingredient: IngredientFullResponse = await asqlite_manager.update_ingredient_in_inventory_by_id(
+                ingredient_id=ingredient_id,
+                user_id=user_id,
+                updates=updates
+            )
+            return updated_ingredient
+        except Exception as e:
+            error_msg = f"Error updating ingredient in inventory: {e}"
+            if e.__class__.__name__ == "InventoryUpdateError":
+                raise HTTPException(status_code=400, detail=error_msg)
+            raise HTTPException(status_code=500, detail=error_msg)
+    
+    except HTTPException as e:
+        error_msg = f"Unknown error occurred while updating ingredient in inventory: {e}"
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+    
+# Get all the ingredients in the inventory for a user
+@app.get("/v1/inventory")
+async def get_all_ingredients_in_inventory(user_id: int = Depends(get_current_user_id)) -> list[IngredientFullResponse]:
+    """
+    Get all the ingredients in the inventory for a user.
+
+    Args:
+        user_id (int) - The user's id in the database.
+    Returns:
+        list[IngredientFullResponse] - A list of all ingredients in the user's inventory.
+    """
+    try:
+        ingredients = await asqlite_manager.get_all_ingredients_in_inventory(user_id=user_id)
+        return ingredients
+    except Exception as e:
+        error_msg = f"Error fetching ingredients from inventory: {e}"
+        raise HTTPException(status_code=500, detail=error_msg)
 
 if __name__ == "__main__":
     import uvicorn
