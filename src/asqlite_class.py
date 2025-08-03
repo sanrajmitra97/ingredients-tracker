@@ -1,6 +1,7 @@
 import aiosqlite
 import logging
 from typing import Tuple
+from datetime import datetime
 
 from src.database_schemas import (
     users_schema, 
@@ -9,6 +10,16 @@ from src.database_schemas import (
     conversions_schema, 
     recipes_schema, 
     recipe_ingredients_schema
+)
+from src.data_models import (
+    IngredientInsertion,
+    InventoryInsertion,
+    IngredientInsertionResponse
+)
+from src.error_models import (
+    IngredientAlreadyExistsInIngredientsError,
+    IngredientInsertionError,
+    IngredientAlreadyExistsInInventoryError
 )
 
 logger = logging.getLogger('uvicorn.error')
@@ -242,3 +253,165 @@ class SqliteManager:
             }
         else:
             return {}
+    
+    async def get_ingredient_id_by_name(self, ingredient_name: str) -> int | None:
+        """
+        Get the id of the ingredient name provided in the `ingredients` table.
+        
+        Args:
+            ingredient_name (str) - The name of the ingredient.
+        Returns:
+            int - The id of the ingredient. None if the ingredient does not exist in the `ingredients` table.
+        """
+        query = """
+                SELECT id
+                FROM ingredients
+                WHERE name = ?
+        """
+        res = await self.cur.execute(query, (ingredient_name,))
+        table: Tuple[int] = await res.fetchone()
+        return table[0] if table else None
+        
+    async def ingredient_exists_in_inventory_by_name(self, ingredient_name: str, user_id: int) -> bool:
+        """
+        Given an ingredient name and user id, check if the ingredient exists in the user's inventory.
+        Args:
+            ingredient_name (str) - The name of the ingredient.
+            user_id (int) - The user's id in the database.
+        Returns:
+            bool - True if the ingredient exists in the user's inventory, False otherwise.
+        """
+        query = """
+                SELECT COUNT(*) 
+                FROM inventory t1
+                INNER JOIN ingredients t2
+                ON t1.ingredient_id = t2.id
+                WHERE t1.user_id = ? AND t2.name = ?
+        """
+        res = await self.cur.execute(query, (user_id, ingredient_name))
+        exists: Tuple[int] = await res.fetchone()
+        return exists[0] > 0
+
+    async def ingredient_exists_in_inventory_by_id(self, ingredient_id: int, user_id: int) -> bool:
+        """
+        Given an ingredient id and user id, check if the ingredient exists in the user's inventory.
+        
+        Args:
+            ingredient_id (int) - The id of the ingredient.
+            user_id (int) - The user's id in the database.
+        Returns:
+            bool - True if the ingredient exists in the user's inventory, False otherwise.
+        """
+        query = """
+                SELECT COUNT(*) 
+                FROM inventory t1
+                INNER JOIN ingredients t2
+                ON t1.ingredient_id = t2.id
+                WHERE t1.user_id = ? AND t2.id = ?
+        """
+        res = await self.cur.execute(query, (user_id, ingredient_id))
+        exists: Tuple[int] = await res.fetchone()
+        return exists[0] > 0
+    
+    async def ingredient_exists_in_ingredients_by_name(self, ingredient_name: str) -> bool:
+        """
+        Given an ingredient name, check if it exists in the `ingredients` table.
+        
+        Args:
+            ingredient_name (str) - The name of the ingredient.
+        Returns:
+            bool - True if the ingredient exists in the `ingredients` table, False otherwise.
+        """
+        query = """
+                SELECT COUNT(*) 
+                FROM ingredients 
+                WHERE name = ?
+        """
+        res = await self.cur.execute(query, (ingredient_name,))
+        exists: Tuple[int] = await res.fetchone()
+        return exists[0] > 0
+    
+    async def ingredient_exists_in_ingredients_by_id(self, ingredient_id: int) -> bool:
+        """
+        Given an ingredient id, check if it exists in the `ingredients` table.
+        Args:
+            ingredient_id (int) - The id of the ingredient.
+        Returns:
+            bool - True if the ingredient exists in the `ingredients` table, False otherwise.
+        """
+        query = """
+                SELECT COUNT(*) 
+                FROM ingredients 
+                WHERE id = ?
+        """
+        res = await self.cur.execute(query, (ingredient_id,))
+        exists: Tuple[int] = await res.fetchone()
+        return exists[0] > 0
+
+    async def add_ingredient_to_ingredients(self, ingredient: IngredientInsertion) -> int:
+        """
+        Add an ingredient into the `ingredients` table. Return the id of the ingredient.
+        If the ingredient already exists in the `ingredients` table, raise an error.
+        
+        Args:
+            ingredient (IngredientInsertion) - The ingredient to be added.
+        Returns:
+            int - The id of the ingredient.
+        Raises:
+            IngredientAlreadyExistsInIngredientsError - If the ingredient already exists in the `ingredients` table.
+            IngredientInsertionError - If there is an error inserting the ingredient into the `ingredients` table.
+        """
+        if await self.ingredient_exists_in_ingredients_by_name(ingredient.name):
+            raise IngredientAlreadyExistsInIngredientsError(f"Ingredient {ingredient.name} already exists in the `ingredients` table.")
+        
+        query = """
+            INSERT INTO ingredients (name, category, unit_type)
+            VALUES (?, ?, ?)
+        """
+        await self.cur.execute(query, (ingredient.name, ingredient.category, ingredient.unit_type))
+        last_row_id = self.cur.lastrowid
+        await self.conn.commit()
+        if not last_row_id:
+            raise IngredientInsertionError(f"Error inserting ingredient {ingredient.name} into the `ingredients` table.")
+        logger.info(f"Added ingredient {ingredient.name} into the `ingredients` table with id {last_row_id}.")
+        return last_row_id
+        
+    async def add_ingredient_into_inventory(self, user_id: int, ingredient_id: int, inventory_insertion: InventoryInsertion) -> IngredientInsertionResponse:
+        """
+        Add an ingredient into the `inventory` table. Return the following metadata:
+            - ingredient_id
+            - inventory_id
+            - user_id
+            - created_at
+            - updated_at
+        
+        Args:
+            user_id (int) - The user's id in the database.
+            ingredient_id (int) - The id of the ingredient.
+            inventory_insertion (InventoryInsertion) - The inventory insertion data.
+        Returns:
+            IngredientInsertionResponse - The metadata of the ingredient insertion.
+        Raises:
+            IngredientInsertionError - If there is an error inserting the ingredient into the `inventory` table.
+            IngredientAlreadyExistsInInventoryError - If the ingredient already exists in the `inventory` table for the user.
+        """
+        if await self.ingredient_exists_in_inventory_by_id(ingredient_id, user_id):
+            raise IngredientAlreadyExistsInInventoryError(f"Ingredient with id {ingredient_id} already exists in the inventory for user {user_id}.")
+        
+        query = """
+            INSERT INTO inventory (user_id, ingredient_id, quantity, minimum_threshold, expiration_date)
+            VALUES (?, ?, ?, ?, ?)
+        """
+        await self.cur.execute(query, (user_id, ingredient_id, inventory_insertion.quantity, inventory_insertion.minimum_threshold, inventory_insertion.expiration_date))
+        last_row_id = self.cur.lastrowid
+        await self.conn.commit()
+        if not last_row_id:
+            raise IngredientInsertionError(f"Error inserting ingredient with id {ingredient_id} into the `inventory` table.")
+        logger.info(f"Added ingredient with id {ingredient_id} into the `inventory` table with id {last_row_id} for user {user_id}.")
+        return IngredientInsertionResponse(
+            ingredient_id=ingredient_id,
+            inventory_id=last_row_id,
+            user_id=user_id,
+            created_at=datetime.now().isoformat(),  # This will be set by the database
+            updated_at=datetime.now().isoformat()   # This will be set by the database
+        )
