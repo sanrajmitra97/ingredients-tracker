@@ -3,3 +3,4 @@ sqlite-tutorial/
 .env
 __pycache__/
 notebooks/
+data/ingredients-manager.db

@@ -14,14 +14,15 @@ from src.data_models import (
     IngredientInsertion,
     InventoryInsertion,
     IngredientFullResponse,
-    InventoryUpdate
+    Ingredient,
 )
 from src.error_models import (
     IngredientAlreadyExistsInIngredientsError,
     IngredientInsertionError,
     IngredientAlreadyExistsInInventoryError,
     InventoryDeletionError,
-    InventoryUpdateError
+    InventoryUpdateError,
+    IngredientNotFoundError
 )
 
 logger = logging.getLogger('uvicorn.error')
@@ -158,6 +159,8 @@ class SqliteManager:
             ingredient_name (str) - The name of the ingredient.
         Returns:
             str - The measurement unit of the ingredient.
+        Raises:
+            IngredientNotFoundError - If the ingredient does not exist in the `ingredients` table.
         """
         query = """
             SELECT unit_type
@@ -167,7 +170,7 @@ class SqliteManager:
         res = await self.cur.execute(query, (ingredient_name, ))
         table: Tuple[str] = await res.fetchone()
         if not table:
-            raise RuntimeError("Ingredient is not found inside the ingredients table")
+            raise IngredientNotFoundError("Ingredient is not found inside the ingredients table")
         return table[0]
     
     async def get_ingredient_measurement_unit_by_id(self, ingredient_id: int) -> str:
@@ -179,6 +182,8 @@ class SqliteManager:
             ingredient_id (int) - The id of the ingredient.
         Returns:
             str - The measurement unit of the ingredient.
+        Raises:
+            IngredientNotFoundError - If the ingredient does not exist in the `ingredients` table.
         """
         query = """
             SELECT unit_type
@@ -189,27 +194,27 @@ class SqliteManager:
         table: Tuple[str] = await res.fetchone()
         unit_type = table[0]
         if not unit_type:
-            raise RuntimeError("Ingredient is not found inside the `ingredients` table")
+            raise IngredientNotFoundError("Ingredient is not found inside the `ingredients` table")
         return unit_type
     
-    async def get_ingredient_info_by_name(self, ingredient_name: str, user_id: int) -> dict:
+    async def get_ingredient_info_by_name(self, ingredient_name: str, user_id: int) -> Ingredient:
         """
         Get the following information about the ingredient name of user id:
-            - ingredient_id
             - name
             - category
             - unit_type
             - quantity
             - minimum_threshold
             - expiration_date
+        If the ingredient does not exist, return None.
         Args:
             ingredient_name (str) - The name of the ingredient.
             user_id (int) - The user's id in the database.
         Returns:
-            dict - A dictionary containing the ingredient's information.
+            Ingredient - The Ingredient class to return.
         """
         query = """
-                SELECT t1.id, t1.name, t1.category, t1.unit_type, t2.quantity, t2.minimum_threshold, t2.expiration_date
+                SELECT t1.name, t1.category, t1.unit_type, t2.quantity, t2.minimum_threshold, t2.expiration_date
                 FROM ingredients t1
                 RIGHT JOIN inventory t2
                 ON t1.id = t2.ingredient_id
@@ -218,37 +223,36 @@ class SqliteManager:
         res = await self.cur.execute(query, (ingredient_name, user_id))
         table = await res.fetchone()
         if table:
-            ingredient_id, name, category, unit_type, quantity, minimum_threshold, expiration_date = table
-            return {
-                "ingredient_id": ingredient_id,
-                "name": name,
-                "category": category,
-                "unit_type": unit_type,
-                "quantity": quantity,
-                "minimum_threshold": minimum_threshold,
-                "expiration_date": expiration_date
-            }
+            name, category, unit_type, quantity, minimum_threshold, expiration_date = table
+            return Ingredient(
+                name=name,
+                category=category,
+                unit_type=unit_type,
+                quantity=quantity,
+                minimum_threshold=minimum_threshold,
+                expiration_date=expiration_date
+            )
         else:
-            return {}
+            return None
 
-    async def get_ingredient_info_by_id(self, ingredient_id: int, user_id: int) -> dict:
+    async def get_ingredient_info_by_id(self, ingredient_id: int, user_id: int) -> Ingredient:
         """
         Get the following information about the ingredient id of user id:
-            - ingredient_id
             - name
             - category
             - unit_type
             - quantity
             - minimum_threshold
             - expiration_date
+        If the ingredient does not exist, return None.
         Args:
             ingredient_id (id) - The id of the ingredient.
             user_id (int) - The user's id in the database.
         Returns:
-            dict - A dictionary containing the ingredient's information.
+            Ingredient - The Ingredient class to return.
         """
         query = """
-                SELECT t1.id, t1.name, t1.category, t1.unit_type, t2.quantity, t2.minimum_threshold, t2.expiration_date
+                SELECT t1.name, t1.category, t1.unit_type, t2.quantity, t2.minimum_threshold, t2.expiration_date
                 FROM ingredients t1
                 RIGHT JOIN inventory t2
                 ON t1.id = t2.ingredient_id
@@ -257,18 +261,17 @@ class SqliteManager:
         res = await self.cur.execute(query, (ingredient_id, user_id))
         table = await res.fetchone()
         if table:
-            ingredient_id, name, category, unit_type, quantity, minimum_threshold, expiration_date = table
-            return {
-                "ingredient_id": ingredient_id,
-                "name": name,
-                "category": category,
-                "unit_type": unit_type,
-                "quantity": quantity,
-                "minimum_threshold": minimum_threshold,
-                "expiration_date": expiration_date
-            }
+            name, category, unit_type, quantity, minimum_threshold, expiration_date = table
+            return Ingredient(
+                name=name,
+                category=category,
+                unit_type=unit_type,
+                quantity=quantity,
+                minimum_threshold=minimum_threshold,
+                expiration_date=expiration_date
+            )
         else:
-            return {}
+            return None
     
     async def get_ingredient_id_by_name(self, ingredient_name: str) -> int | None:
         """
@@ -277,7 +280,9 @@ class SqliteManager:
         Args:
             ingredient_name (str) - The name of the ingredient.
         Returns:
-            int - The id of the ingredient. None if the ingredient does not exist in the `ingredients` table.
+            int - The id of the ingredient.
+        Raises:
+            IngredientNotFoundError - If the ingredient does not exist in the `ingredients` table.
         """
         query = """
                 SELECT id
@@ -286,7 +291,9 @@ class SqliteManager:
         """
         res = await self.cur.execute(query, (ingredient_name,))
         table: Tuple[int] = await res.fetchone()
-        return table[0] if table else None
+        if not table:
+            raise IngredientNotFoundError(f"Ingredient {ingredient_name} not found in the `ingredients` table.")
+        return table[0]
         
     async def ingredient_exists_in_inventory_by_name(self, ingredient_name: str, user_id: int) -> bool:
         """
@@ -395,19 +402,16 @@ class SqliteManager:
         
     async def add_ingredient_into_inventory(self, user_id: int, ingredient_id: int, inventory_insertion: InventoryInsertion) -> IngredientFullResponse:
         """
-        Add an ingredient into the `inventory` table. Return the following metadata:
-            - ingredient_id
-            - inventory_id
-            - user_id
-            - created_at
-            - updated_at
+        Add an ingredient into the `inventory` table. Return IngredientFullResponse object.
         
         Args:
             user_id (int) - The user's id in the database.
             ingredient_id (int) - The id of the ingredient.
             inventory_insertion (InventoryInsertion) - The inventory insertion data.
+        
         Returns:
             IngredientFullResponse - The metadata of the ingredient insertion.
+        
         Raises:
             IngredientInsertionError - If there is an error inserting the ingredient into the `inventory` table.
             IngredientAlreadyExistsInInventoryError - If the ingredient already exists in the `inventory` table for the user.
@@ -425,7 +429,6 @@ class SqliteManager:
         if not last_row_id:
             await self.conn.rollback()
             raise IngredientInsertionError(f"Error inserting ingredient with id {ingredient_id} into the `inventory` table.")
-        logger.info(f"Added ingredient with id {ingredient_id} into the `inventory` table with id {last_row_id} for user {user_id}.")
 
         # Fetch the created_at and updated_at timestamps
         created_updated_timings_query = """
@@ -451,6 +454,7 @@ class SqliteManager:
         if not ingredient_info_table:
             raise IngredientInsertionError(f"Error fetching ingredient info for ingredient with id {ingredient_id} in the `ingredients` table.")
         name, category, unit_type = ingredient_info_table
+        logger.info(f"Added ingredient {name} with id {ingredient_id} into the `inventory` table with id {last_row_id} for user {user_id}.")
         return IngredientFullResponse(
             ingredient_id=ingredient_id,
             inventory_id=last_row_id,
@@ -472,8 +476,10 @@ class SqliteManager:
         Args:
             ingredient_id (int) - The id of the ingredient.
             user_id (int) - The user's id in the database.
+        
         Returns:
             bool - True if the ingredient was deleted successfully, False otherwise.
+        
         Raises:
             InventoryDeletionError - If the ingredient id does not exist in the `inventory` table for the user.
         """
@@ -488,8 +494,39 @@ class SqliteManager:
         await self.conn.commit()
         if self.cur.rowcount == 0:
             return False
+        logger.info(f"Deleted ingredient with id {ingredient_id} from the inventory for user {user_id}.")
         return True
-    
+
+    async def delete_ingredient_from_inventory_by_name(self, ingredient_name: str, user_id: int) -> bool:
+        """
+        Delete an ingredient from the `inventory` table by ingredient name and user id.
+        
+        Args:
+            ingredient_name (str) - The name of the ingredient.
+            user_id (int) - The user's id in the database.
+        
+        Returns:
+            bool - True if the ingredient was deleted successfully, False otherwise.
+        
+        Raises:
+            InventoryDeletionError - If the ingredient name does not exist in the `inventory` table for the user.
+        """
+        if not await self.ingredient_exists_in_inventory_by_name(ingredient_name, user_id):
+            raise InventoryDeletionError(f"Ingredient {ingredient_name} does not exist in the inventory for user {user_id}.")
+        
+        query = """
+            DELETE FROM inventory 
+            WHERE user_id = ? AND ingredient_id = (
+                SELECT id FROM ingredients WHERE name = ?
+            )
+        """
+        await self.cur.execute(query, (user_id, ingredient_name))
+        await self.conn.commit()
+
+        if self.cur.rowcount == 0:
+            return False
+        logger.info(f"Deleted ingredient {ingredient_name} from the inventory for user {user_id}.")
+        return True
 
     async def update_ingredient_in_inventory_by_id(self, ingredient_id: int, user_id: int, updates: dict) -> IngredientFullResponse:
         """
@@ -499,8 +536,10 @@ class SqliteManager:
             ingredient_id (int) - The id of the ingredient.
             user_id (int) - The user's id in the database.
             updates (dict) - The updates to be made to the ingredient.
+        
         Returns:
             IngredientFullResponse - The updated ingredient information.
+        
         Raises:
             InventoryUpdateError - If the ingredient does not exist in the inventory table.
         """
@@ -548,6 +587,8 @@ class SqliteManager:
         if not updated_info_table:
             raise InventoryUpdateError(f"Error fetching updated ingredient info for ingredient with id {ingredient_id} in the inventory for user {user_id}.")
         ingredient_name, category, unit_type, inventory_id, quantity, minimum_threshold, expiration_date, created_at, updated_at = updated_info_table
+
+        logger.info(f"Updated ingredient with id {ingredient_id} in the inventory for user {user_id}.")
         return IngredientFullResponse(
             ingredient_id=ingredient_id,
             inventory_id=inventory_id,
@@ -562,12 +603,89 @@ class SqliteManager:
             expiration_date=expiration_date
         )
     
+    async def update_ingredient_in_inventory_by_name(self, ingredient_name: str, user_id: int, updates: dict) -> IngredientFullResponse:
+        """
+        Update an ingredient in the `inventory` table by ingredient name and user id.
+        
+        Args:
+            ingredient_name (str) - The name of the ingredient.
+            user_id (int) - The user's id in the database.
+            updates (dict) - The updates to be made to the ingredient.
+        
+        Returns:
+            IngredientFullResponse - The updated ingredient information.
+        
+        Raises:
+            InventoryUpdateError - If the ingredient does not exist in the inventory table.
+        """
+        # Check if the ingredient exists in the inventory
+        if not await self.ingredient_exists_in_inventory_by_name(ingredient_name, user_id):
+            raise InventoryUpdateError(f"Ingredient {ingredient_name} does not exist in the inventory for user {user_id}.")
+        
+        # Prepare the update query
+        update_fields = []
+        update_values = []
+
+        for key, value in updates.items():
+            if value is not None:
+                update_fields.append(f"{key} = ?")
+                update_values.append(value)
+
+        if not update_fields:
+            raise InventoryUpdateError("No fields to update. At least one field must be provided for update.")
+        
+        update_fields.append("updated_at = CURRENT_TIMESTAMP")
+        update_values.extend([user_id, ingredient_name])
+
+        query = f"""
+            UPDATE inventory
+            SET {', '.join(update_fields)}
+            WHERE user_id = ? AND ingredient_id = (
+                SELECT id FROM ingredients WHERE name = ?
+            )
+        """
+        await self.cur.execute(query, update_values)
+        await self.conn.commit()
+
+        if self.cur.rowcount == 0:
+            raise InventoryUpdateError(f"Failed to update ingredient {ingredient_name} in the inventory for user {user_id}.")
+        
+        # Fetch the updated ingredient information
+        updated_info_query = """
+            SELECT t1.id, t1.name, t1.category, t1.unit_type, t2.id, t2.quantity, t2.minimum_threshold, t2.expiration_date, t2.created_at, t2.updated_at
+            FROM ingredients t1
+            INNER JOIN inventory t2
+            ON t1.id = t2.ingredient_id
+            WHERE t1.name = ? AND t2.user_id = ?
+        """
+        updated_info_res = await self.cur.execute(updated_info_query, (ingredient_name, user_id))
+        updated_info_table = await updated_info_res.fetchone()
+        if not updated_info_table:
+            raise InventoryUpdateError(f"Error fetching updated ingredient info for ingredient {ingredient_name} in the inventory for user {user_id}.")
+        ingredient_id, name, category, unit_type, inventory_id, quantity, minimum_threshold, expiration_date, created_at, updated_at = updated_info_table
+
+        logger.info(f"Updated ingredient {ingredient_name} in the inventory for user {user_id}.")
+        return IngredientFullResponse(
+            ingredient_id=ingredient_id,
+            inventory_id=inventory_id,
+            user_id=user_id,
+            created_at=created_at,
+            updated_at=updated_at,
+            name=name,
+            category=category,
+            unit_type=unit_type,
+            quantity=quantity,
+            minimum_threshold=minimum_threshold,
+            expiration_date=expiration_date
+        )
+    
     async def get_all_ingredients_in_inventory(self, user_id: int) -> list[IngredientFullResponse]:
         """
         Get all ingredients in the inventory for a given user id.
         
         Args:
             user_id (int) - The user's id in the database.
+        
         Returns:
             list[IngredientFullResponse] - A list of IngredientFullResponse objects containing ingredient information.
         """

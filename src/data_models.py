@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from enum import Enum
+from datetime import date, datetime
 
 class Category(str, Enum):
     staple = "staple"
@@ -22,12 +23,12 @@ class IngredientInsertion(BaseModel):
 class InventoryInsertion(BaseModel):
     quantity: float = Field(..., ge=0)
     minimum_threshold: float = Field(..., ge=0)
-    expiration_date: str | None = None # e.g."2023-10-01"
+    expiration_date: date | None = None # e.g."2023-10-01"
 
 class InventoryUpdate(BaseModel):
     quantity: float | None = Field(default=None, ge=0)
     minimum_threshold: float | None = Field(default=None, ge=0)
-    expiration_date: str | None = None # e.g."2023-10-01"
+    expiration_date: date | None = None # e.g."2023-10-01"
 
     class Config:
         # This validates that at least one field is provided for update
@@ -45,8 +46,8 @@ class IngredientFullResponse(IngredientInsertion, InventoryInsertion):
     ingredient_id: int
     inventory_id: int
     user_id: int
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

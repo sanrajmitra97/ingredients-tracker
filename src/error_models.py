@@ -17,3 +17,7 @@ class InventoryDeletionError(Exception):
 class InventoryUpdateError(Exception):
     """Raised when there is an error updating an ingredient in the inventory table."""
     pass
+
+class IngredientNotFoundError(Exception):
+    """Raised when an ingredient is not found in the ingredients or inventory table."""
+    pass

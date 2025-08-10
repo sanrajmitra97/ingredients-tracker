@@ -24,18 +24,19 @@ users (
 )
 ```
 # `ingredients` Table
-1. We need a table to record down all the unique ingredients we have in our database. 
-2. We need to be consistent with units.  We use the following units:
+1. We need a table to record down all the unique ingredients we have in our database.
+2. This represents a global table of all items for all users.
+3. We need to be consistent with units.  We use the following units:
     1. weight - grams.
     2. volume - millilitres. 
     3. pieces - itself.
-3. The different categories:
+4. The different categories:
     1. Produce - e.g. Banana, Garlic
     2. Protein - e.g. Eggs, Chicken Breast, Fish
     3. Staples - e.g. Sugar, Flour, Salt, Rice
     4. Dairy - e.g. Milk, Yogurt, Cheese
     5. Condiment - e.g. Rosemary
-4. `feature` - For every new ingredient that the user wants to input, the app needs to update the `ingredients` table, as well as the `inventory` table.
+5. `feature` - For every new ingredient that the user wants to input, the app needs to update the `ingredients` table, as well as the `inventory` table.
 
 ```sql
 ingredients (
@@ -164,7 +165,7 @@ recipe_ingredients (
 These are the general endpoints we want to create. It may not reflect the actual arguments that go into the endpoints or what is getting returned.
 
 1. `get_ingredient_quantity(ingredient: str | int, user_id: int) -> float`
-    1. Given an ingredient and user, return the quantity available.
+    1. Given an ingredient and user, return the quantity available. If the ingredient does not exist, return 0.0.
 2. `get_ingredient_info(ingredient: str | id, user_id: int) -> Ingredient`
     1. Given an ingredient and user, return the row associated with that ingredient from the `ingredients` and `inventory` table.
 3. `add_new_ingredient(ingredient: Ingredient, user_id: int) -> None` 
@@ -195,3 +196,14 @@ These are the general endpoints we want to create. It may not reflect the actual
     1. Get the conversion of an ingredient.
 17. Other functions to add:
     1. unit_validation → Ensure recipe ingredients use units that exist in your conversion table or are already standardized.
+
+# Paths
+### Get Ingredient Quantity
+- `/v1/inventory/by_name/{ingredient_name}/quantity`
+- `/v1/inventory/by_id/{ingredient_id}/quantity`
+### Get ingredient measurement unit
+- `/v1/ingredients/by_name/{ingredient_name}/measurement_unit`
+- `/v1/ingredients/by_id/{ingredient_id}/measurement_unit`
+### Get ingredient information
+- `/v1/inventory/by_name/{ingredient_name}/info`
+- `/v1/inventory/by_id/{ingredient_id}/info`
