@@ -1,6 +1,6 @@
 # High Level Thought Process
 
-In this project, we want to build an app that tracks the number of ingredients you currently have in stock at your house. This lets a user view which recipes they can currently cook, as well as what they need to buy the next time they go shopping.
+In this project, we want to build an app that tracks the number of ingredients you currently have in stock at your house. This lets a user view which recipes they can currently cook, as well as what they need to buy the next time they go shopping. And once bought, the quantities of the ingredients should be reflected in the app - either through manual input or through computer vision.
 
 ### Stack:
 
@@ -8,11 +8,11 @@ In this project, we want to build an app that tracks the number of ingredients y
 - DB: SQLite
 - Frontend: Undecided.
 
-# Users Table
+# `users` Table
 1. `feature` - Every user will have an email and a password.
 2. `feature` - Each password must be hashed for user protection.
-2. `feature` - There will also be a "created date" and an "updated date" for each user. If a user decides to update their email or password, it should be reflected in the updated date.
-3. `feature` - In the future, we want users to use their email to sign in (like they will log into google/twitter/etc.)
+3. `feature` - There will also be a "created date" and an "updated date" for each user. If a user decides to update their email or password, it should be reflected in the updated date.
+4. `feature` - In the future, we want users to use their email to sign in (like they will log into google/twitter/etc.)
 
 ```sql
 users (
@@ -23,82 +23,103 @@ users (
 		updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 )
 ```
-
-# Ingredients Table
-
-1. `feature` - For a new user, record down the different ingredients they have. 
-2. We need to be consistent with units.  We use the following units:
+# `ingredients` Table
+1. We need a table to record down all the unique ingredients we have in our database.
+2. This represents a global table of all items for all users.
+3. We need to be consistent with units.  We use the following units:
     1. weight - grams.
     2. volume - millilitres. 
-    3. atomic - itself.
-3. The different categories:
+    3. pieces - itself.
+4. The different categories:
     1. Produce - e.g. Banana, Garlic
-    2. Proteins - e.g. Eggs, Chicken Breast, Fish
+    2. Protein - e.g. Eggs, Chicken Breast, Fish
     3. Staples - e.g. Sugar, Flour, Salt, Rice
     4. Dairy - e.g. Milk, Yogurt, Cheese
-4. `feature` - If an ingredient expires OR drops below the minimum_threshold value, we must notify the user that they need to top up this quantity in the UI. We can add this to a shopping list data structure.
-5. `feature` - When a user is cooking a meal, the UI will display a check-box like design, telling the user to add the `quantity` `unit_type` `name`. E.g. "Add 200 ml of milk". When the user has finished cooking, they would be prompted to "finish" cooking, which will give the backend the signal to subtract the quantities used during cooking.
-6. `feature` - If a user decides to buy new ingredients, they should be allowed to add the ingredient into the app and the database should reflect this. This can later be upgraded to use computer vision to read the receipt, and add the values into a database.
+    5. Condiment - e.g. Rosemary
+5. `feature` - For every new ingredient that the user wants to input, the app needs to update the `ingredients` table, as well as the `inventory` table.
 
 ```sql
 ingredients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    category TEXT NOT NULL, -- category: produce, staples, protein, dairy, condiment
+    unit_type TEXT NOT NULL, -- category: pieces, grams, millilitres
+)
+```
+| id - `int` (pk) | name - `str` (unique) | category | unit_type - `str`
+| --- | --- | --- | --- |
+| 1 | banana | produce | pieces |
+| 2 | rice | staples | grams |
+| 3 | salt | staples | grams |
+| 4 | milk | dairy | millilitres |
+| 5 | flour | staples | grams |
+| 6 | cooking oil | oils | millilitres |
+| 7 | egg | protein | pieces |
+| 8 | chicken breast | protein | grams |
+
+# `inventory` Table
+1. `feature` - For a new user, record down the different ingredients they have in the inventory table. This must be done if the user is not found in the `users` table.
+4. `feature` - If an ingredient expires OR drops below the minimum_threshold value, we must notify the user that they need to top up this quantity in the UI. We can add this to a shopping list data structure.
+5. `feature` - When a user is cooking a meal, the UI will display a check-box like design, telling the user to add the `quantity` `unit_type` of `name`. E.g. "Add 200 ml of milk". When the user has finished cooking, they would be prompted to "finish" cooking, which will give the backend the signal to subtract the quantities used during cooking.
+6. `feature` - If a user decides to restock on ingredients, they should be allowed to add the ingredient into the app and the ingredient table should reflect this. This can later be upgraded to use computer vision to read the receipt, and add the values into a database.
+
+```sql
+inventory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    name TEXT NOT NULL,     -- users can have the same ingredient names
-    category TEXT NOT NULL, -- produce, staples, protein, dairy
-    unit_type TEXT NOT NULL, -- atomic, grams, millilitres
-    quantity REAL NOT NULL, -- The amount in stock
+    ingredient_id INT NOT NULL,     -- users can have the same ingredient names
+    quantity REAL NOT NULL,         -- The amount in stock
     minimum_threshold REAL NOT NULL,
-    expiration_date TEXT,
+    expiration_date TEXT,           -- some ingredients may not expire, like honey
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE(user_id, name)
+    FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE
+    UNIQUE(user_id, ingredient_id)
 )
 ```
 
-| id - `int` (pk) | user_id - `str` (fk) | name - `str` (unique) | category - `str` | unit_type - `str` | quantity - `float` | minimum_threshold - `float` | expiration_date - `date` | created_at - `datetime` | updated_at - `datetime` |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 1 | banana | produce | atomic | 12 | 3 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 2 | 1 | rice | staples | grams | 5000 | 1000 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 3 | 1 | salt | staples | grams | 500 | 100 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 4 | 1 | milk | dairy | millilitres | 1500 | 200 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 5 | 1 | flour | staples | grams | 1000 | 200 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 6 | 1 | cooking oil | oils | millilitres | 1000 | 200 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 7 | 1 | egg | protein | atomic | 12 | 2 | <today’s date + 5> | <today’s date> | <today’s date> |
-| 8 | 1 | chicken breast | protein | grams | 500 | 50 | <today’s date + 5> | <today’s date> | <today’s date> |
+| id - `int` (pk) | user_id - `str` (fk) | ingredient_id - `int` (fk) | quantity - `float` | minimum_threshold - `float` | expiration_date - `date` | created_at - `datetime` | updated_at - `datetime` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1 | 1 | 12 | 3 | <today’s date + 5> | <today’s date> | <today’s date> |
+| 2 | 1 | 2 | 5000 | 1000 | <today’s date + 5> | <today’s date> | <today’s date> |
+| 3 | 1 | 3 | 500 | 100 | <today’s date + 5> | <today’s date> | <today’s date> |
 
 # Conversion Table
 
-1. In many recipes, different terms are used. For example, a cup of rice. A tablespoon of salt etc. Using a conversion table, we can convert the term used in the recipe, into a quantity that is used in the Ingredients table. Then, we can subtract the value from the Ingredients table as and when necessary.
-2. `feature` - If a recipe states “Add (x) (measurement_unit)”, convert the (measurement_unit) used to get the quantity, and subtract the quantity from the Ingredients table when the user has used that ingredient to cook the dish.
+1. In many recipes, different terms are used. For example, a cup of rice. A tablespoon of salt etc. Using a conversion table, we can convert the term used in the recipe, into the unit of measurement we are using under the `unit_type` column in the `ingredients` table. Then, we can subtract the value from the `inventory` table's "quantity" column as and when necessary.
+2. `feature` - If a user wants to add a conversion, the backend must first check if the conversion exists for the `ingredient_id` and `measurement_unit` as this is distinct in the table.
+3. `feature` - If a recipe states “Add (x) (measurement_unit)”, convert the (measurement_unit) used to get the quantity, and subtract the quantity from the `inventory` table when the user has used that ingredient to cook the dish.
+4. For now, we are keeping this standardized across users for ease of implementation. In the future, users can add their own conversion values.
 
 ```sql
 conversions (
-    id INTEGER PRIMARY KEY,
-    ingredient_name TEXT NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ingredient_id INTEGER NOT NULL,
     measurement_unit TEXT NOT NULL,
     quantity_in_standard_unit REAL NOT NULL,
-    FOREIGN KEY (ingredient_name) REFERENCES ingredients(name) ON UPDATE CASCADE,
-    UNIQUE(ingredient_name, measurement_unit)
+    FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON UPDATE CASCADE,
+    UNIQUE(ingredient_id, measurement_unit)
 )
 ```
 
-| id - `int` (pk) | ingredient_name - `str` (fk) | measurement_unit - `str` | quantity_in_standard_unit - `float` |
+| id - `int` (pk) | ingredient_id - `int` (fk) | measurement_unit - `str` | quantity_in_standard_unit - `float` |
 | --- | --- | --- | --- |
-| 1 | rice | cup | 200 |
-| 2 | flour | cup | 120 |
-| 3 | salt | tablespoon | 19 |
-| 4 | salt | teaspoon | 6 |
-| 5 | cooking oil | tablespoon | 14.7868 |
-| 6 | cooking oil | teaspoon | 4.92892 |
+| 1 | 2 | cup | 200 |
+| 2 | 5 | cup | 120 |
+| 3 | 3 | tablespoon | 19 |
+| 4 | 3 | teaspoon | 6 |
+| 5 | 4 | tablespoon | 14.7868 |
+| 6 | 4 | teaspoon | 4.92892 |
 
 # Recipe and Recipe Ingredients Table
 
 1. `feature` - At any given point in time, we need to reflect what recipes are cookable, i.e. if the user has enough ingredients, then the UI should show these are the possible recipes. Hence, we should have a list of cookable recipes.
 2. `feature` - When a user wants to cook a recipe, the backend will check whether they have enough ingredients to cook the chosen recipe, and if not, what are the missing ingredients, and their quantities.
 3. `feature` - The app should have search a functionality of the different recipies and ingredients, so the user can see their recipes and see how much of their ingredients they have left.
-4. `feature` -The user should also be able to search for recipes using the web, and add it dynamically to the app database. This can be added as a future feature.
+4. `feature` - When adding a recipe, a user will add their own recipe, together with the ingredients required and the name, prep time etc. i.e. Everything that is required for `recipes` table and `recipe_ingredients` table.
+5. `feature` - The user should also be able to search for recipes using the web, and add it dynamically to the app database. This can be added as a future feature.
+
 
 ```sql
 recipes (
@@ -114,7 +135,7 @@ recipes (
 )
 
 recipe_ingredients (
-		id INTEGER PRIMARY KEY,
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		recipe_id INTEGER NOT NULL,
 		ingredient_name TEXT NOT NULL,
 		quantity REAL NOT NULL,
@@ -127,10 +148,10 @@ recipe_ingredients (
 
 ### Recipe
 
-| id - `int` <primary_key> | name - `str` | description - `str` | servings - `int` | prep_time_minutes - `int` | created_at - `datetime` | updated_at - `datetime` |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | Tomato Pasta | some text | 1 | 30 | datetime | datetime |
-| … | … | … | … | … | … | … |
+| id - `int` <primary_key> | user_id - `int` | name - `str` | description - `str` | servings - `int` | prep_time_minutes - `int` | created_at - `datetime` | updated_at - `datetime` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1 | Tomato Pasta | some text | 1 | 30 | datetime | datetime |
+| … | … | … | … | … | … | … | … |
 
 ### Recipe Ingredients
 
@@ -141,19 +162,20 @@ recipe_ingredients (
 | 3 | 1 | cooking oil |  5| millilitres | some text |
 
 # Backend Endpoints
+These are the general endpoints we want to create. It may not reflect the actual arguments that go into the endpoints or what is getting returned.
 
-1. `get_ingredient_quantity(ingredient: str | id, user_id: int) -> float`
-    1. Given an ingredient, the function returns the quantity available.
+1. `get_ingredient_quantity(ingredient: str | int, user_id: int) -> float`
+    1. Given an ingredient and user, return the quantity available. If the ingredient does not exist, return 0.0.
 2. `get_ingredient_info(ingredient: str | id, user_id: int) -> Ingredient`
-    1. Given an ingredient, return the row associated with that ingredient from the Ingredients table.
+    1. Given an ingredient and user, return the row associated with that ingredient from the `ingredients` and `inventory` table.
 3. `add_new_ingredient(ingredient: Ingredient, user_id: int) -> None` 
-    1. This function should allow users to add a new ingredient into the Ingredients table.
+    1. Adds a new ingredient into the `inventory` and `ingredient` table for that user.
 4. `delete_ingredient(ingredient: Ingredient, user_id: int) -> None`
-    1. This function deletes the entire ingredient from the Ingredients table.
+    1. This function deletes the entire ingredient from the `ingredients`, which should then cascade into the `inventory` table. It should not get deleted from the `conversions` table.
 5. `update_ingredient(ingredient: str | id, info: dict, user_id: int) -> None`
-    1. This function updates information of an ingredient like quantity etc.
+    1. This function updates information of an ingredient like quantity, in the `inventory` table.
 6. `get_recipe(recipe_id: int, user_id: int) → Recipe`
-    1. This function should display the ingredients needed, together with their associated quantity, for a given recipe id and user id.
+    1. This function should display the ingredients needed, together with their associated quantities, for a given recipe id and user id.
 8. `add_recipe(recipe_name: str, recipe_ingredients: Recipe, user_id: int) -> None`
     1. This function should allow users to add recipes to the backend database. Populate both recipe and recipe_ingredients table.
 9. `delete_recipe(recipe_name: str, user_id: int) -> None`
@@ -170,9 +192,18 @@ recipe_ingredients (
     1. A list of ingredients to buy that have dropped below the minimum threshold or have expired.
 15. `get_expiring_ingredients(user_id: int, days: int = 7) -> List[Tuple[str, date]]`
     1. Show which ingredients are about to expire in `days` days, and when their expiry date is.
-16. Other functions to add:
+16. `get_conversion(ingredient: str | id) -> float`
+    1. Get the conversion of an ingredient.
+17. Other functions to add:
     1. unit_validation → Ensure recipe ingredients use units that exist in your conversion table or are already standardized.
 
-
-# Sources
-1. Google.
+# Paths
+### Get Ingredient Quantity
+- `/v1/inventory/by_name/{ingredient_name}/quantity`
+- `/v1/inventory/by_id/{ingredient_id}/quantity`
+### Get ingredient measurement unit
+- `/v1/ingredients/by_name/{ingredient_name}/measurement_unit`
+- `/v1/ingredients/by_id/{ingredient_id}/measurement_unit`
+### Get ingredient information
+- `/v1/inventory/by_name/{ingredient_name}/info`
+- `/v1/inventory/by_id/{ingredient_id}/info`
